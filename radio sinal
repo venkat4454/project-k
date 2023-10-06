@@ -1,0 +1,40 @@
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
+import numpy as np
+
+# Generate a toy dataset for demonstration purposes.
+# In practice, you should replace this with your actual dataset.
+# X_train, y_train, X_test, y_test should be your data and labels.
+# Make sure to preprocess your data accordingly.
+num_classes = 5  # Number of radio signal classes
+signal_length = 128  # Length of each signal
+
+X_train = np.random.rand(100, signal_length, 1)  # Training data (replace with your data)
+y_train = np.random.randint(0, num_classes, size=100)  # Training labels (replace with your labels)
+X_test = np.random.rand(20, signal_length, 1)  # Testing data (replace with your data)
+y_test = np.random.randint(0, num_classes, size=20)  # Testing labels (replace with your labels)
+
+# Define the model
+model = keras.Sequential([
+    layers.Input(shape=(signal_length, 1)),  # Assuming 1D signals
+    layers.Conv1D(32, 3, activation='relu'),
+    layers.MaxPooling1D(2),
+    layers.Conv1D(64, 3, activation='relu'),
+    layers.MaxPooling1D(2),
+    layers.Flatten(),
+    layers.Dense(128, activation='relu'),
+    layers.Dense(num_classes, activation='softmax')
+])
+
+# Compile the model
+model.compile(optimizer='adam',
+              loss='sparse_categorical_crossentropy',  # Use 'categorical_crossentropy' if using one-hot encoded labels
+              metrics=['accuracy'])
+
+# Train the model
+model.fit(X_train, y_train, epochs=10, batch_size=32, validation_data=(X_test, y_test))
+
+# Evaluate the model
+test_loss, test_acc = model.evaluate(X_test, y_test, verbose=2)
+print(f"Test accuracy: {test_acc}")

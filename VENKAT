@@ -1,0 +1,137 @@
+import os
+import keras
+import numpy as np 
+import pandas as pd 
+import itertools
+from sklearn.model_selection import train_test_split
+from keras.models import Model, load_model
+from sklearn.metrics import confusion_matrix
+import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+%matplotlib inline
+for dirname, _, filenames in os.walk('/kaggle/input'):    
+    files = {}
+    for filename in filenames:        
+        files[filename] = os.path.join(dirname, filename)
+print(files)
+
+# Open classes.txt
+with open(files['classes.txt']) as file: 
+
+   classes = file.read()
+
+def str_to_list(line):
+    line = line.replace('\n','')
+    line = line.replace('classes = ','')
+    line = eval(line)
+    return line
+    
+classes = str_to_list(classes)
+print(classes)
+# Upload signals, labels, snrs
+labels = np.load('/kaggle/input/deepsigio-radioml-201801a-new/labels.npy', mmap_mode = 'r')
+signals = np.load('/kaggle/input/deepsigio-radioml-201801a-new/signals.npy', mmap_mode = 'r')
+snrs = np.load('/kaggle/input/deepsigio-radioml-201801a-new/snrs.npy', mmap_mode = 'r')
+
+train_acc = np.load('/kaggle/input/deepsigio-radioml-201801a-new/train_acc.npy', mmap_mode = 'r')
+val_acc = np.load('/kaggle/input/deepsigio-radioml-201801a-new/val_acc.npy', mmap_mode = 'r')
+train_loss = np.load('/kaggle/input/deepsigio-radioml-201801a-new/train_loss.npy', mmap_mode = 'r')
+val_loss = np.load('/kaggle/input/deepsigio-radioml-201801a-new/val_loss.npy', mmap_mode = 'r')
+
+# Upload model
+model_full = load_model(files['model_full_SNR.h5'])
+# Split arrays for 3 parts (we take only third part of dataset of labeled signals because of the memory)
+part = 3
+signals = signals[::part, :, :]
+labels = labels[::part, :]
+snrs = snrs[::part, :]
+
+print(signals.shape)
+print(labels.shape)
+print(snrs.shape)
+# Ndarray to array
+snrs = np.ravel(snrs)
+print(f"All possible SNRS: {np.unique(snrs)} db")
+# Masked numpy array 
+c = np.ma.masked_where(snrs > 8, snrs)
+msk = c.mask
+# Count unique elements in array
+print(np.unique(c.mask, return_counts=True))
+# Mask array of signals and labels (snrs > 8)
+signals = signals[msk]
+labels = labels[msk]
+
+print(len(signals))
+# Train|test = 80|20
+
+x_train,x_test, y_train, y_test = train_test_split(signals, labels, train_size=0.8, stratify=labels, random_state = 42)
+
+# print(f"Количество строк в y_train по классам: {np.bincount(y_train)}")
+# print(f"Количество строк в y_test по классам: {np.bincount(y_test)}")
+print(x_test.shape)
+print(y_test.shape)
+
+# Train|validation|test = 64|16|20
+x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, train_size=0.8, stratify=y_train, random_state = 42)
+
+# print(f"Количество строк в y_train по классам: {np.bincount(y_test)}")
+# print(f"Количество строк в y_test по классам: {np.bincount(y_val)}")
+print(x_train.shape)
+print(y_train.shape)
+# evaluate model on test data
+loss, acc = model_full.evaluate(x_test, y_test, batch_size=32)
+print('EVALUATING MODEL ON TEST DATA:')
+print('Test Accuracy: ', str(round(acc*100, 2)), '%')
+print('\n')
+predictions=model_full.predict(x_test)
+classes_y=np.argmax(predictions,axis=1)
+conf_matrix = confusion_matrix(y_true=np.argmax(y_test,axis=1), y_pred=classes_y)
+nr_rows = conf_matrix.shape[0]
+nr_cols = conf_matrix.shape[1]
+
+plt.figure(figsize=(18,18), dpi= 200) 
+im = plt.imshow(conf_matrix, cmap=plt.cm.Greens)
+ax = plt.gca()
+plt.title('Confusion Matrix', fontsize=16) 
+plt.ylabel('Actual Labels', fontsize=12)
+plt.xlabel('Predicted Labels', fontsize=12)
+tick_marks = np.arange(len(classes))
+plt.yticks(tick_marks, classes)
+# plt.xticks(tick_marks, classes)
+
+for i, j in itertools.product(range(nr_rows), range(nr_cols)):
+    plt.text(j, i, conf_matrix[i, j], horizontalalignment='center',
+            color='white' if conf_matrix[i, j] > conf_matrix.max()/2 else 'black')
+    
+
+# Divide existing axes and create new axes
+# at bottom side of image
+divider = make_axes_locatable(ax)
+cax = divider.append_axes("right", size="5%", pad=0.05)
+plt.colorbar(im, cax=cax) 
+history = [[train_acc, val_acc],[train_loss, val_loss]]
+title = ['Model accuracy', 'Model loss']
+ylabel = ['accuracy', 'loss']
+fig = plt.figure(figsize=(20, 7), dpi=80)
+for i, id in enumerate(title):
+    plt.subplot(1, 2, i+1)
+   
+    plt.plot(history[i][0], label = 'train')
+    plt.plot(history[i][1], label = 'val')
+    plt.title(id)
+    plt.xlabel('epoch')
+    plt.ylabel(ylabel[i])
+    plt.legend(loc='upper right')
+plt.tight_layout(pad=1.7)
+idx = [17,18]
+fig = plt.figure(figsize=(20, 5), dpi=80)
+for i, id in enumerate(idx):
+    plt.subplot(1, 2, i+1)
+    plt.plot(signals[id][:, 0], color='green', label='I component')
+    plt.plot(signals[id][:, 1], color='salmon', label='Q component')
+    plt.title(classes[id])
+    plt.xlabel('Points')
+    plt.ylabel('Amplitude')
+    plt.legend(loc='upper right')
+plt.tight_layout(pad=1.7)
+    
